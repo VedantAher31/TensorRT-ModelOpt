@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResNet-50 Inference Speed Benchmark</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B1120; /* Darker tech background */
+        }
+        .js-plotly-plot .plotly .modebar {
+            display: none !important; /* Hide plotly toolbar for cleaner UI */
+        }
+        /* Entrance Animations */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.6s ease-out forwards;
+            opacity: 0;
+        }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        .delay-300 { animation-delay: 300ms; }
+    </style>
+</head>
+<body class="text-slate-300 antialiased min-h-screen p-4 md:p-8 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-[#0B1120] to-[#0B1120]">
+
+    <div class="max-w-6xl mx-auto space-y-8">
+        <!-- Header -->
+        <header class="animate-fade-in-up bg-slate-800/50 backdrop-blur-xl rounded-3xl shadow-2xl p-6 md:p-10 border border-slate-700/50 relative overflow-hidden">
+            <div class="absolute top-0 right-0 -mt-20 -mr-20 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl"></div>
+            <h1 class="text-3xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-3 tracking-tight">ResNet-50 Inference Benchmark</h1>
+            <p class="text-slate-400 text-lg max-w-2xl">TensorFlow vs. NVIDIA TensorRT (TF-TRT) optimization performance.</p>
+        </header>
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            <div class="animate-fade-in-up delay-100 bg-slate-800/40 backdrop-blur-md rounded-3xl shadow-lg p-6 border border-slate-700/50 flex flex-col justify-center items-center text-center hover:bg-slate-800/60 transition-colors">
+                <p class="text-xs md:text-sm font-semibold text-slate-500 uppercase tracking-widest mb-2">Baseline Speed</p>
+                <h3 class="text-3xl md:text-4xl font-bold text-slate-200">147 <span class="text-lg md:text-xl font-normal text-slate-500">img/s</span></h3>
+                <p class="text-xs md:text-sm text-slate-500 mt-2">TF 2.0 Saved Model</p>
+            </div>
+            
+            <div class="animate-fade-in-up delay-200 bg-slate-800/40 backdrop-blur-md rounded-3xl shadow-lg p-6 border border-emerald-500/20 flex flex-col justify-center items-center text-center relative overflow-hidden group hover:border-emerald-500/40 transition-colors">
+                <div class="absolute inset-0 bg-gradient-to-b from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <p class="text-xs md:text-sm font-semibold text-emerald-400/80 uppercase tracking-widest mb-2 relative z-10">Peak Performance</p>
+                <h3 class="text-3xl md:text-4xl font-bold text-emerald-400 relative z-10">4,746 <span class="text-lg md:text-xl font-normal text-emerald-600/50">img/s</span></h3>
+                <p class="text-xs md:text-sm text-emerald-500/60 mt-2 relative z-10">TF-TRT INT8 Model</p>
+            </div>
+
+            <div class="animate-fade-in-up delay-300 bg-gradient-to-br from-cyan-500/10 to-blue-600/10 backdrop-blur-md rounded-3xl shadow-[0_0_30px_rgba(6,182,212,0.15)] p-6 border border-cyan-500/30 flex flex-col justify-center items-center text-center relative overflow-hidden group hover:border-cyan-400/50 transition-colors">
+                <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-400 to-blue-500"></div>
+                <div class="relative z-10">
+                    <p class="text-xs md:text-sm font-semibold text-cyan-400 uppercase tracking-widest mb-2">Max Speedup</p>
+                    <h3 class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400 drop-shadow-sm">32.3x</h3>
+                    <p class="text-xs md:text-sm text-cyan-500/80 mt-2">INT8 vs Baseline</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Container -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in-up delay-300">
+            <!-- Chart 1: Absolute Performance -->
+            <div class="bg-slate-800/40 backdrop-blur-md rounded-3xl shadow-lg p-4 md:p-6 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
+                <h2 class="text-lg md:text-xl font-bold text-slate-200 mb-4 flex items-center"><span class="w-2 h-6 rounded bg-emerald-400 mr-3"></span>Throughput Comparison</h2>
+                <div id="throughputChart" class="w-full h-[300px] md:h-[400px]"></div>
+                <p class="text-xs text-slate-500 text-center mt-2">Error bars indicate 10% variance across runs.</p>
+            </div>
+
+            <!-- Chart 2: Relative Speedup -->
+            <div class="bg-slate-800/40 backdrop-blur-md rounded-3xl shadow-lg p-4 md:p-6 border border-slate-700/50 hover:border-slate-600/50 transition-colors">
+                <h2 class="text-lg md:text-xl font-bold text-slate-200 mb-4 flex items-center"><span class="w-2 h-6 rounded bg-cyan-400 mr-3"></span>Relative Speedup Multiplier</h2>
+                <div id="speedupChart" class="w-full h-[300px] md:h-[400px]"></div>
+                <p class="text-xs text-slate-500 text-center mt-2">Normalized against TF 2.0 Saved Model performance.</p>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="animate-fade-in-up delay-300 bg-slate-800/40 backdrop-blur-md rounded-3xl shadow-lg overflow-hidden border border-slate-700/50">
+            <div class="px-4 md:px-6 py-4 border-b border-slate-700/50 bg-slate-800/50">
+                <h2 class="text-lg md:text-xl font-bold text-slate-200">Raw Benchmark Data</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[600px] md:min-w-full">
+                    <thead>
+                        <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-widest">
+                            <th class="px-4 md:px-6 py-4 font-semibold whitespace-nowrap">Model Configuration</th>
+                            <th class="px-4 md:px-6 py-4 font-semibold text-right whitespace-nowrap">Avg Speed (img/s)</th>
+                            <th class="px-4 md:px-6 py-4 font-semibold text-right whitespace-nowrap">Range (-10% to +10%)</th>
+                            <th class="px-4 md:px-6 py-4 font-semibold text-right whitespace-nowrap">Speedup</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-700/50 text-slate-300">
+                        <tr class="hover:bg-slate-700/20 transition-colors">
+                            <td class="px-4 md:px-6 py-4 font-medium flex items-center whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-slate-500 mr-3"></span>TF 2.0 Saved Model</td>
+                            <td class="px-4 md:px-6 py-4 text-right font-mono text-sm">147</td>
+                            <td class="px-4 md:px-6 py-4 text-right text-slate-500 font-mono text-sm">132.3 – 161.7</td>
+                            <td class="px-4 md:px-6 py-4 text-right"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-700 text-slate-300">1.0x</span></td>
+                        </tr>
+                        <tr class="hover:bg-slate-700/20 transition-colors">
+                            <td class="px-4 md:px-6 py-4 font-medium flex items-center whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-emerald-500/50 mr-3"></span>TF-TRT FP32</td>
+                            <td class="px-4 md:px-6 py-4 text-right font-mono text-sm">1,985</td>
+                            <td class="px-4 md:px-6 py-4 text-right text-slate-500 font-mono text-sm">1,786.5 – 2,183.5</td>
+                            <td class="px-4 md:px-6 py-4 text-right"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400">13.5x</span></td>
+                        </tr>
+                        <tr class="hover:bg-slate-700/20 transition-colors">
+                            <td class="px-4 md:px-6 py-4 font-medium flex items-center whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-emerald-400 mr-3"></span>TF-TRT FP16</td>
+                            <td class="px-4 md:px-6 py-4 text-right font-mono text-sm">4,388</td>
+                            <td class="px-4 md:px-6 py-4 text-right text-slate-500 font-mono text-sm">3,949.2 – 4,826.8</td>
+                            <td class="px-4 md:px-6 py-4 text-right"><span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-400/20 text-emerald-400">29.8x</span></td>
+                        </tr>
+                        <tr class="hover:bg-slate-700/20 transition-colors bg-cyan-900/10">
+                            <td class="px-4 md:px-6 py-4 font-bold text-cyan-400 flex items-center whitespace-nowrap"><span class="w-2 h-2 rounded-full bg-cyan-400 mr-3 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span>TF-TRT INT8</td>
+                            <td class="px-4 md:px-6 py-4 text-right font-mono text-sm font-bold text-cyan-300">4,746</td>
+                            <td class="px-4 md:px-6 py-4 text-right text-slate-400 font-mono text-sm">4,271.4 – 5,220.6</td>
+                            <td class="px-4 md:px-6 py-4 text-right"><span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]">32.3x</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Configuration
+        const models = ['TF 2.0<br>Saved Model', 'TF-TRT<br>FP32', 'TF-TRT<br>FP16', 'TF-TRT<br>INT8'];
+        const speeds = [147, 1985, 4388, 4746];
+        const errorMargin = 0.10; // 10%
+        
+        const errors = speeds.map(speed => speed * errorMargin);
+        const speedups = speeds.map(speed => (speed / speeds[0]).toFixed(1));
+
+        // Colors
+        const colors = [
+            '#475569', // slate-600 for baseline
+            '#059669', // emerald-600 for FP32
+            '#34d399', // emerald-400 for FP16
+            '#22d3ee'  // cyan-400 for INT8
+        ];
+
+        const hoverColors = [
+            '#64748b',
+            '#10b981',
+            '#6ee7b7',
+            '#67e8f9'
+        ];
+
+        // Shared Layout Settings
+        const commonLayout = {
+            font: { family: 'Inter, sans-serif', color: '#94a3b8' },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            margin: { t: 20, r: 10, b: 40, l: 30 }, // Reduced margins for mobile
+            hovermode: 'closest',
+            showlegend: false
+        };
+
+        const isMobileInit = window.innerWidth < 768;
+
+        // --- Chart 1: Absolute Throughput ---
+        const throughputData = [{
+            x: models,
+            y: speeds,
+            type: 'bar',
+            text: speeds.map(s => isMobileInit ? s.toLocaleString() : s.toLocaleString() + ' img/s'),
+            textposition: 'auto',
+            textfont: { color: ['#cbd5e1', '#e2e8f0', '#0f172a', '#0f172a'], size: isMobileInit ? 10 : 12 },
+            hoverinfo: 'none', // Custom hover text handled below
+            hovertemplate: '<b>%{x}</b><br>Average: %{y:,} img/s<br>Range: %{customdata[0]:,} - %{customdata[1]:,} img/s<extra></extra>',
+            customdata: speeds.map(s => [Math.round(s * 0.9), Math.round(s * 1.1)]),
+            marker: {
+                color: colors,
+                line: { color: hoverColors, width: 0 },
+                border: { radius: 4 } 
+            },
+            error_y: {
+                type: 'data',
+                array: errors,
+                visible: true,
+                color: '#cbd5e1',
+                thickness: 2,
+                width: 6
+            }
+        }];
+
+        const throughputLayout = {
+            ...commonLayout,
+            yaxis: {
+                title: { text: 'Images / Second', font: { color: '#cbd5e1' } },
+                gridcolor: 'rgba(255,255,255,0.05)',
+                zerolinecolor: 'rgba(255,255,255,0.1)',
+                tickformat: ',',
+                automargin: true // Added for responsiveness
+            },
+            xaxis: {
+                // tickangle removed to allow automatic angling on narrow screens
+                gridcolor: 'rgba(255,255,255,0.05)',
+                automargin: true // Added for responsiveness
+            }
+        };
+
+        Plotly.newPlot('throughputChart', throughputData, throughputLayout, {responsive: true});
+
+        // --- Chart 2: Relative Speedup ---
+        const speedupData = [{
+            x: models,
+            y: speedups,
+            type: 'bar',
+            text: speedups.map(s => s + 'x'),
+            textposition: 'outside',
+            textfont: { color: '#e2e8f0', size: isMobileInit ? 12 : 14, weight: 'bold' },
+            hovertemplate: '<b>%{x}</b><br>Speedup: %{y}x<extra></extra>',
+            marker: {
+                color: colors,
+                opacity: 0.9,
+                line: { color: hoverColors, width: 0 }
+            }
+        }];
+
+        const speedupLayout = {
+            ...commonLayout,
+            yaxis: {
+                title: { text: 'Speedup Multiplier (x)', font: { color: '#cbd5e1' } },
+                gridcolor: 'rgba(255,255,255,0.05)',
+                zerolinecolor: 'rgba(255,255,255,0.1)',
+                range: [0, Math.max(...speedups) * 1.25], // Extra space for 'outside' text on mobile
+                automargin: true // Added for responsiveness
+            },
+            xaxis: {
+                gridcolor: 'rgba(255,255,255,0.05)',
+                automargin: true // Added for responsiveness
+            }
+        };
+
+        Plotly.newPlot('speedupChart', speedupData, speedupLayout, {responsive: true});
+
+        // Handle window resize to keep charts responsive
+        window.addEventListener('resize', function() {
+            const isMobile = window.innerWidth < 768;
+            
+            // Adjust text strings and sizes inside the charts dynamically on window resize
+            Plotly.restyle('throughputChart', {
+                text: [speeds.map(s => isMobile ? s.toLocaleString() : s.toLocaleString() + ' img/s')],
+                'textfont.size': isMobile ? 10 : 12
+            });
+            
+            Plotly.restyle('speedupChart', {
+                'textfont.size': isMobile ? 12 : 14
+            });
+
+            Plotly.Plots.resize('throughputChart');
+            Plotly.Plots.resize('speedupChart');
+        });
+    </script>
+</body>
+</html>
